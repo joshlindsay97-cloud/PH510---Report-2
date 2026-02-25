@@ -1,15 +1,46 @@
 #!/usr/bin/env python3
+# MIT License
+#
+# Copyright (c) 2026 Josh Lindsay
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 """
-PH510 Assignment 2 (Vector OOP + Geometry + Hansen checks)
+PH510 Assignment 2 — Vector OOP + triangle geometry + Hansen checks.
 
-Commit 6: Add Hansen fields + Part 3 numerical checks (terminal output).
-Still prints Task 2 + Task 3; Excel export comes later.
+What this script does:
+- Task 2: triangle areas + internal angles
+- Task 3: finite-difference divergence/curl checks for the Hansen fields
 
-Python: 3.10+
+Python:
+- Intended for Python 3.10+
+
+Usage:
+  python ph510_a2.py
+  python ph510_a2.py --h 1e-6 --points 0,0,0 0.1,0.2,0.3 1,1,1
+  python ph510_a2.py --out results.txt
 """
 
 import argparse
 import cmath
+import contextlib
+import io
 import math
 from dataclasses import dataclass
 from typing import Callable, Generic, Iterable, List, Sequence, Tuple, TypeVar, Union
@@ -137,7 +168,7 @@ def radians_to_degrees(vals: Sequence[float]) -> Tuple[float, ...]:
 
 
 # =========================
-# Part 3: Finite differences
+# Task 3: Finite differences
 # =========================
 
 def central_diff_scalar(
@@ -160,7 +191,11 @@ def divergence(field: Callable[[Vector3[float]], ComplexVector3], x: Vector3[flo
     fx = lambda p: field(p).x
     fy = lambda p: field(p).y
     fz = lambda p: field(p).z
-    return central_diff_scalar(fx, x, 0, h) + central_diff_scalar(fy, x, 1, h) + central_diff_scalar(fz, x, 2, h)
+    return (
+        central_diff_scalar(fx, x, 0, h)
+        + central_diff_scalar(fy, x, 1, h)
+        + central_diff_scalar(fz, x, 2, h)
+    )
 
 
 def curl(field: Callable[[Vector3[float]], ComplexVector3], x: Vector3[float], h: float) -> ComplexVector3:
@@ -182,19 +217,10 @@ def curl(field: Callable[[Vector3[float]], ComplexVector3], x: Vector3[float], h
 
 
 # =========================
-# Part 3: Hansen setup + checks
+# Hansen fields
 # =========================
 
 def hansen_setup():
-    """
-    k = pi*(0,0,1), |k| = pi
-
-    M(x) = ex * exp(i k·x)
-    N(x) = ey * exp(i k·x)
-
-    Returns analytic divergence/curl for this specific setup so we can sanity-check
-    the finite-difference operators.
-    """
     k = Vector3(0.0, 0.0, math.pi)
     k_mag = k.magnitude()
 
@@ -277,7 +303,7 @@ def run_task2() -> None:
         (Vector3(0.0, 0.0, 0.0), Vector3(1.0, -1.0, 0.0), Vector3(0.0, 0.0, 1.0)),
     ]
 
-    headers = ["Tri", "A", "B", "C", "Area", "Angles (deg)"]
+    headers = ["Tri", "A", "B", "C", "Area", "Angles (rad)", "Angles (deg)"]
     rows: List[List[str]] = []
 
     for i, (a, b, c) in enumerate(triangles, start=1):
@@ -291,6 +317,7 @@ def run_task2() -> None:
                 fmt_vec3(b, 6),
                 fmt_vec3(c, 6),
                 f"{area:.12g}",
+                f"({ang_r[0]:.6g}, {ang_r[1]:.6g}, {ang_r[2]:.6g})",
                 f"({ang_d[0]:.6g}, {ang_d[1]:.6g}, {ang_d[2]:.6g})",
             ]
         )
@@ -391,12 +418,30 @@ def parse_args() -> argparse.Namespace:
         default=["0,0,0", "0.1,0.2,0.3", "1,1,1"],
         help="Points as x,y,z floats (space-separated).",
     )
+    p.add_argument(
+        "--out",
+        default="",
+        help="Optional path to save the printed output to a text file (e.g. results.txt).",
+    )
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     points = [parse_point(s) for s in args.points]
+
+    if args.out:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            run_task2()
+            run_task3(points=points, h=float(args.h))
+        output = buf.getvalue()
+
+        print(output, end="")
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write(output)
+        print(f"\nSaved output to: {args.out}")
+        return
 
     run_task2()
     run_task3(points=points, h=float(args.h))
