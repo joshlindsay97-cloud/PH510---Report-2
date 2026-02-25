@@ -8,7 +8,6 @@ The script builds a small 3D vector class and then uses it for:
 
 ## Requirements
 - Python 3.10+
-- No third-party packages required (standard library only)
 
 ## Run
 From the repo root:
@@ -28,8 +27,8 @@ python assignment2/ph510_a2.py --out assignment2_results.txt
 Task 2 prints a table of vertices, areas, and angles (radians + degrees).
 
 Task 3 prints divergence/curl results and residuals comparing:
-- numerical vs analytic curl (sanity check for the FD implementation)
-- numerical curl vs the assignment RHS (to test whether the stated identities hold)
+- numerical vs analytic curl
+- numerical curl vs the assignment RHS
 
 ## License
 MIT License (see header of ph510_a2.py).
