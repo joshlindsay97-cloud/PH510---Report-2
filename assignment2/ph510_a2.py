@@ -2,8 +2,8 @@
 """
 PH510 Assignment 2 (Vector OOP + Geometry + Hansen checks)
 
-Commit 4: Add ComplexVector3 inheritance (Hermitian dot product).
-Task 2 output is kept as the main run target at this stage.
+Commit 5: Add finite-difference operators (central difference, divergence, curl).
+Task 2 output is still the default run target.
 
 Python: 3.10+
 """
@@ -11,7 +11,7 @@ Python: 3.10+
 import argparse
 import math
 from dataclasses import dataclass
-from typing import Generic, Iterable, List, Sequence, Tuple, TypeVar, Union
+from typing import Callable, Generic, Iterable, List, Sequence, Tuple, TypeVar, Union
 
 Number = Union[float, complex]
 TNum = TypeVar("TNum", float, complex)
@@ -131,6 +131,51 @@ def radians_to_degrees(vals: Sequence[float]) -> Tuple[float, ...]:
     return tuple(v * 180.0 / math.pi for v in vals)
 
 
+# =========================
+# Finite differences (Part 3)
+# =========================
+
+def central_diff_scalar(
+    f: Callable[[Vector3[float]], complex], x: Vector3[float], axis: int, h: float
+) -> complex:
+    """Central difference approximation for a scalar function."""
+    if axis == 0:
+        xp, xm = Vector3(x.x + h, x.y, x.z), Vector3(x.x - h, x.y, x.z)
+    elif axis == 1:
+        xp, xm = Vector3(x.x, x.y + h, x.z), Vector3(x.x, x.y - h, x.z)
+    elif axis == 2:
+        xp, xm = Vector3(x.x, x.y, x.z + h), Vector3(x.x, x.y, x.z - h)
+    else:
+        raise ValueError("axis must be 0, 1, or 2")
+    return (f(xp) - f(xm)) / (2.0 * h)
+
+
+def divergence(field: Callable[[Vector3[float]], ComplexVector3], x: Vector3[float], h: float) -> complex:
+    """Numerical divergence ∇·F using central differences."""
+    fx = lambda p: field(p).x
+    fy = lambda p: field(p).y
+    fz = lambda p: field(p).z
+    return central_diff_scalar(fx, x, 0, h) + central_diff_scalar(fy, x, 1, h) + central_diff_scalar(fz, x, 2, h)
+
+
+def curl(field: Callable[[Vector3[float]], ComplexVector3], x: Vector3[float], h: float) -> ComplexVector3:
+    """Numerical curl ∇×F using central differences."""
+    fx = lambda p: field(p).x
+    fy = lambda p: field(p).y
+    fz = lambda p: field(p).z
+
+    dFz_dy = central_diff_scalar(fz, x, 1, h)
+    dFy_dz = central_diff_scalar(fy, x, 2, h)
+
+    dFx_dz = central_diff_scalar(fx, x, 2, h)
+    dFz_dx = central_diff_scalar(fz, x, 0, h)
+
+    dFy_dx = central_diff_scalar(fy, x, 0, h)
+    dFx_dy = central_diff_scalar(fx, x, 1, h)
+
+    return ComplexVector3(dFz_dy - dFy_dz, dFx_dz - dFz_dx, dFy_dx - dFx_dy)
+
+
 def print_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> None:
     widths = [len(h) for h in headers]
     for r in rows:
@@ -186,8 +231,8 @@ def run_task2() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="PH510 Assignment 2 (up to ComplexVector3).")
-    p.add_argument("--h", type=float, default=1e-5)
+    p = argparse.ArgumentParser(description="PH510 Assignment 2 (up to finite differences).")
+    p.add_argument("--h", type=float, default=1e-5, help="Central difference step.")
     p.add_argument("--points", nargs="*", default=["0,0,0"])
     return p.parse_args()
 
