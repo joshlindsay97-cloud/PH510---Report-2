@@ -2,13 +2,13 @@
 """
 PH510 Assignment 2 (Vector OOP + Geometry + Hansen checks)
 
-Commit 5: Add finite-difference operators (central difference, divergence, curl).
-Task 2 output is still the default run target.
+Commit 6: Add Hansen fields + Part 3 numerical checks (terminal output).
 
 Python: 3.10+
 """
 
 import argparse
+import cmath
 import math
 from dataclasses import dataclass
 from typing import Callable, Generic, Iterable, List, Sequence, Tuple, TypeVar, Union
@@ -101,6 +101,10 @@ class ComplexVector3(Vector3[complex]):
         )
 
 
+# =========================
+# Task 2: Geometry
+# =========================
+
 def triangle_area(a: Vector3[float], b: Vector3[float], c: Vector3[float]) -> float:
     """Area = 0.5 * ||(b-a) x (c-a)||."""
     return 0.5 * (b - a).cross(c - a).magnitude()
@@ -132,7 +136,7 @@ def radians_to_degrees(vals: Sequence[float]) -> Tuple[float, ...]:
 
 
 # =========================
-# Finite differences (Part 3)
+# Part 3: Finite differences
 # =========================
 
 def central_diff_scalar(
@@ -176,6 +180,70 @@ def curl(field: Callable[[Vector3[float]], ComplexVector3], x: Vector3[float], h
     return ComplexVector3(dFz_dy - dFy_dz, dFx_dz - dFz_dx, dFy_dx - dFx_dy)
 
 
+# =========================
+# Part 3: Hansen setup + checks
+# =========================
+
+def hansen_setup():
+    """
+    k = pi*(0,0,1), |k| = pi
+
+    M(x) = ex * exp(i k·x)
+    N(x) = ey * exp(i k·x)
+
+    Returns analytic divergence/curl for this specific setup so we can check
+    the finite-difference operators.
+    """
+    k = Vector3(0.0, 0.0, math.pi)
+    k_mag = k.magnitude()
+
+    def phase(x: Vector3[float]) -> complex:
+        return cmath.exp(1j * k.dot(x))
+
+    def M(x: Vector3[float]) -> ComplexVector3:
+        ph = phase(x)
+        return ComplexVector3(ph, 0.0 * ph, 0.0 * ph)
+
+    def N(x: Vector3[float]) -> ComplexVector3:
+        ph = phase(x)
+        return ComplexVector3(0.0 * ph, ph, 0.0 * ph)
+
+    def div_M_analytic(_: Vector3[float]) -> complex:
+        return 0.0 + 0.0j
+
+    def div_N_analytic(_: Vector3[float]) -> complex:
+        return 0.0 + 0.0j
+
+    def curl_M_analytic(x: Vector3[float]) -> ComplexVector3:
+        ph = phase(x)
+        return ComplexVector3(0.0j, 1j * k_mag * ph, 0.0j)
+
+    def curl_N_analytic(x: Vector3[float]) -> ComplexVector3:
+        ph = phase(x)
+        return ComplexVector3(-1j * k_mag * ph, 0.0j, 0.0j)
+
+    return k, k_mag, phase, M, N, div_M_analytic, div_N_analytic, curl_M_analytic, curl_N_analytic
+
+
+# =========================
+# Output helpers
+# =========================
+
+def fmt_complex(z: complex, prec: int = 6) -> str:
+    a, b = z.real, z.imag
+    if abs(b) < 10 ** (-(prec + 1)):
+        return f"{a:.{prec}g}"
+    if abs(a) < 10 ** (-(prec + 1)):
+        return f"{b:.{prec}g}j"
+    return f"{a:.{prec}g}{b:+.{prec}g}j"
+
+
+def fmt_vec3(v: Vector3[Number], prec: int = 6) -> str:
+    def f(x: Number) -> str:
+        return fmt_complex(x, prec) if isinstance(x, complex) else f"{float(x):.{prec}g}"
+    return f"({f(v.x)}, {f(v.y)}, {f(v.z)})"
+
+
 def print_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> None:
     widths = [len(h) for h in headers]
     for r in rows:
@@ -196,9 +264,9 @@ def print_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> None:
     print(line("-"))
 
 
-def fmt_vec3(v: Vector3[Number]) -> str:
-    return f"({v.x}, {v.y}, {v.z})"
-
+# =========================
+# Task runners
+# =========================
 
 def run_task2() -> None:
     triangles = [
@@ -218,9 +286,9 @@ def run_task2() -> None:
         rows.append(
             [
                 str(i),
-                fmt_vec3(a),
-                fmt_vec3(b),
-                fmt_vec3(c),
+                fmt_vec3(a, 6),
+                fmt_vec3(b, 6),
+                fmt_vec3(c, 6),
                 f"{area:.12g}",
                 f"({ang_d[0]:.6g}, {ang_d[1]:.6g}, {ang_d[2]:.6g})",
             ]
@@ -230,16 +298,107 @@ def run_task2() -> None:
     print_table(headers, rows)
 
 
+def run_task3(points: Sequence[Vector3[float]], h: float) -> None:
+    k, k_mag, phase, M, N, div_M_a, div_N_a, curl_M_a, curl_N_a = hansen_setup()
+
+    headers = [
+        "Point x",
+        "phase",
+        "divM_num",
+        "divM_an",
+        "divN_num",
+        "divN_an",
+        "||curlN_num-curlN_an||",
+        "||curlM_num-curlM_an||",
+        "||curlN_num-M/|k|||",
+        "||curlM_num-N/|k|||",
+    ]
+    rows: List[List[str]] = []
+
+    print("\n=== Task 3: Hansen checks (finite diff vs analytic) ===\n")
+    print(f"k = {fmt_vec3(k, 6)}  |k| = {k_mag:.12g}  h = {h:g}\n")
+
+    for x in points:
+        ph = phase(x)
+
+        divM_num = divergence(M, x, h)
+        divN_num = divergence(N, x, h)
+        divM_an = div_M_a(x)
+        divN_an = div_N_a(x)
+
+        curlN_num = curl(N, x, h)
+        curlM_num = curl(M, x, h)
+        curlN_an = curl_N_a(x)
+        curlM_an = curl_M_a(x)
+
+        rhs_curlN_assign = M(x) / k_mag
+        rhs_curlM_assign = N(x) / k_mag
+
+        res_curlN_vs_an = (curlN_num - curlN_an).magnitude()
+        res_curlM_vs_an = (curlM_num - curlM_an).magnitude()
+        res_curlN_vs_assign = (curlN_num - rhs_curlN_assign).magnitude()
+        res_curlM_vs_assign = (curlM_num - rhs_curlM_assign).magnitude()
+
+        rows.append(
+            [
+                fmt_vec3(x, 6),
+                fmt_complex(ph, 6),
+                fmt_complex(divM_num, 6),
+                fmt_complex(divM_an, 6),
+                fmt_complex(divN_num, 6),
+                fmt_complex(divN_an, 6),
+                f"{res_curlN_vs_an:.6g}",
+                f"{res_curlM_vs_an:.6g}",
+                f"{res_curlN_vs_assign:.6g}",
+                f"{res_curlM_vs_assign:.6g}",
+            ]
+        )
+
+    print_table(headers, rows)
+
+    x0 = points[0]
+    print("\n--- Details at first point ---")
+    print("x =", fmt_vec3(x0, 6), " phase =", fmt_complex(phase(x0), 12))
+    print("M(x) =", fmt_vec3(M(x0), 12))
+    print("N(x) =", fmt_vec3(N(x0), 12))
+    print("curl(N)_num =", fmt_vec3(curl(N, x0, h), 12))
+    print("curl(N)_an  =", fmt_vec3(curl_N_a(x0), 12))
+    print("M/|k|       =", fmt_vec3(M(x0) / k_mag, 12))
+    print("curl(M)_num =", fmt_vec3(curl(M, x0, h), 12))
+    print("curl(M)_an  =", fmt_vec3(curl_M_a(x0), 12))
+    print("N/|k|       =", fmt_vec3(N(x0) / k_mag, 12))
+
+
+# =========================
+# CLI
+# =========================
+
+def parse_point(s: str) -> Vector3[float]:
+    parts = s.split(",")
+    if len(parts) != 3:
+        raise ValueError(f"Bad point '{s}'. Use x,y,z")
+    x, y, z = (float(p.strip()) for p in parts)
+    return Vector3(x, y, z)
+
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="PH510 Assignment 2 (up to finite differences).")
-    p.add_argument("--h", type=float, default=1e-5, help="Central difference step.")
-    p.add_argument("--points", nargs="*", default=["0,0,0"])
+    p = argparse.ArgumentParser(description="PH510 A2: vectors + triangles + Hansen checks.")
+    p.add_argument("--h", type=float, default=1e-5, help="Central difference step (default 1e-5).")
+    p.add_argument(
+        "--points",
+        nargs="*",
+        default=["0,0,0", "0.1,0.2,0.3", "1,1,1"],
+        help="Points as x,y,z floats (space-separated).",
+    )
     return p.parse_args()
 
 
 def main() -> None:
-    _ = parse_args()
+    args = parse_args()
+    points = [parse_point(s) for s in args.points]
+
     run_task2()
+    run_task3(points=points, h=float(args.h))
 
 
 if __name__ == "__main__":
