@@ -2,7 +2,8 @@
 """
 PH510 Assignment 2 (Vector OOP + Geometry + Hansen checks)
 
-Commit 3: Vector3 + triangle area + triangle angles (Task 2 output)
+Commit 4: Add ComplexVector3 inheritance (Hermitian dot product).
+Task 2 output is kept as the main run target at this stage.
 
 Python: 3.10+
 """
@@ -68,6 +69,36 @@ class Vector3(Generic[TNum]):
         cy = self._z * other._x - self._x * other._z
         cz = self._x * other._y - self._y * other._x
         return self.__class__(cx, cy, cz)
+
+    def scaled(self, scalar: TNum) -> "Vector3[TNum]":
+        return self.__class__(self._x * scalar, self._y * scalar, self._z * scalar)
+
+    def __mul__(self, scalar: TNum) -> "Vector3[TNum]":
+        return self.scaled(scalar)
+
+    def __rmul__(self, scalar: TNum) -> "Vector3[TNum]":
+        return self.scaled(scalar)
+
+    def __truediv__(self, scalar: TNum) -> "Vector3[TNum]":
+        if scalar == 0:
+            raise ZeroDivisionError("Cannot divide vector by zero.")
+        return self.__class__(self._x / scalar, self._y / scalar, self._z / scalar)
+
+
+@dataclass(frozen=True, slots=True)
+class ComplexVector3(Vector3[complex]):
+    """Complex 3D vector using the Hermitian dot product a* · b."""
+
+    _x: complex
+    _y: complex
+    _z: complex
+
+    def dot(self, other: "ComplexVector3") -> complex:
+        return (
+            self._x.conjugate() * other._x
+            + self._y.conjugate() * other._y
+            + self._z.conjugate() * other._z
+        )
 
 
 def triangle_area(a: Vector3[float], b: Vector3[float], c: Vector3[float]) -> float:
@@ -155,7 +186,7 @@ def run_task2() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="PH510 Assignment 2 (Task 2 stage).")
+    p = argparse.ArgumentParser(description="PH510 Assignment 2 (up to ComplexVector3).")
     p.add_argument("--h", type=float, default=1e-5)
     p.add_argument("--points", nargs="*", default=["0,0,0"])
     return p.parse_args()
