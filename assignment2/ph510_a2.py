@@ -3,6 +3,7 @@
 PH510 Assignment 2 (Vector OOP + Geometry + Hansen checks)
 
 Commit 6: Add Hansen fields + Part 3 numerical checks (terminal output).
+Still prints Task 2 + Task 3; Excel export comes later.
 
 Python: 3.10+
 """
@@ -191,7 +192,7 @@ def hansen_setup():
     M(x) = ex * exp(i k·x)
     N(x) = ey * exp(i k·x)
 
-    Returns analytic divergence/curl for this specific setup so we can check
+    Returns analytic divergence/curl for this specific setup so we can sanity-check
     the finite-difference operators.
     """
     k = Vector3(0.0, 0.0, math.pi)
